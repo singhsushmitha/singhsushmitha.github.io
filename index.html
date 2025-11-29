@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mock Test — Interactive Quiz</title>
+  <style>
+    :root{
+      --bg:#f7f9fb; --card:#ffffff; --accent:#4f6ef7; --correct:#17a34a; --wrong:#e03d3d;
+      --muted:#6b7280;
+    }
+    html,body{height:100%;margin:0;font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+    body{background:linear-gradient(180deg,#eef5ff 0%, #f7f9fb 100%);display:flex;align-items:center;justify-content:center;padding:28px;}
+    .container{width:100%;max-width:920px;background:var(--card);box-shadow:0 8px 30px rgba(24,39,75,0.08);border-radius:12px;padding:26px;}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+    h1{font-size:20px;margin:0;}
+    .meta{color:var(--muted);font-size:13px;}
+    .question-card{padding:18px;border-radius:10px;background:#fff;border:1px solid #eef2ff;margin-top:12px;}
+    .qnum{font-weight:600;color:var(--accent);}
+    .qtext{margin:8px 0 14px;font-size:18px;}
+    .options{display:flex;flex-direction:column;gap:10px;}
+    label.option{display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;border:1px solid #eef1ff;cursor:pointer;}
+    input[type="radio"]{width:18px;height:18px;}
+    .controls{display:flex;gap:10px;align-items:center;margin-top:14px;}
+    button{background:var(--accent);color:#fff;border:none;padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:600;}
+    button.secondary{background:#fff;color:var(--accent);border:1px solid #e6ecff;}
+    button:disabled{opacity:0.5;cursor:not-allowed}
+    .result{margin-top:12px;padding:12px;border-radius:8px;font-weight:600;display:none;}
+    .result.correct{background:rgba(23,163,74,0.12);color:var(--correct);border:1px solid rgba(23,163,74,0.18);}
+    .result.wrong{background:rgba(224,61,61,0.08);color:var(--wrong);border:1px solid rgba(224,61,61,0.12);}
+    .small{font-size:13px;color:var(--muted)}
+    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:16px;}
+    .progress{height:10px;background:#eef3ff;border-radius:20px;overflow:hidden;width:40%}
+    .progress > i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#7f9bff);width:0%}
+    .score-badge{background:#111827;color:white;padding:8px 12px;border-radius:999px;font-weight:700}
+    .review-list{margin-top:14px;border-radius:8px;padding:12px;background:#fbfdff;border:1px dashed #e9f0ff;display:none}
+    .citation{font-size:12px;color:var(--muted);margin-top:10px}
+    @media(max-width:640px){ .container{padding:16px} .qtext{font-size:16px} }
+  </style>
+</head>
+<body>
+  <div class="container" role="main">
+    <header>
+      <div>
+        <h1>Mock Test — Braze (Friends-only)</h1>
+        <div class="meta">Interactive MCQ — select an answer to reveal the correct one</div>
+      </div>
+      <div class="score-badge" id="scoreBadge">Score: 0 / 0</div>
+    </header>
+
+    <div class="question-card" id="card">
+      <div class="qnum" id="qnum">Question 1</div>
+      <div class="qtext" id="qtext">Loading...</div>
+
+      <form id="optionsForm" class="options" autocomplete="off">
+        <!-- Options inserted here -->
+      </form>
+
+      <div class="controls">
+        <button id="checkBtn" disabled>Check Answer</button>
+        <button id="nextBtn" class="secondary" disabled>Next</button>
+        <div class="small" style="margin-left:8px">Select one option to enable "Check Answer"</div>
+      </div>
+
+      <div class="result" id="resultBox" aria-live="polite"></div>
+
+      <div class="small" style="margin-top:10px">Questions loaded from your uploaded Mock Test.pdf.  [oai_citation:1‡Mock Test.pdf](sediment://file_00000000d2c872088092f5ba96a0b9ce)</div>
+    </div>
+
+    <div class="footer">
+      <div class="progress" aria-hidden="true"><i id="progFill"></i></div>
+      <div>
+        <button id="restartBtn" class="secondary">Restart</button>
+        <button id="reviewBtn" class="secondary">Review Answers</button>
+      </div>
+    </div>
+
+    <div class="review-list" id="reviewList">
+      <strong>Review</strong>
+      <div id="reviewItems"></div>
+    </div>
+  </div>
+
+  <script>
+    // QUESTIONS ARRAY: first 30 questions extracted from your Mock Test.pdf (answers hidden until user checks)
+    const questions = [
+      {
+        id:1,
+        q: "Which of the following is NOT an example of a segmentation filter that can be used in Braze to target a specific audience?",
+        options: ["A) User location", "B) Purchase history", "C) Delivery time zone", "D) User device type"],
+        answer: 2, // zero-based index: C is index 2
+        explanation: "Delivery time zone is not a standard segmentation filter in Braze (compared to location, purchase history, device type)."
+      },
+      {
+        id:2,
+        q: "When creating a segment in Braze, which filter combination would you use to target users who have both purchased an item AND have a high engagement rate?",
+        options: ["A) Purchase history AND engagement rate", "B) Purchase history OR engagement rate", "C) Engagement rate NOT purchase history", "D) Purchase history AND location"],
+        answer: 0,
+        explanation: "Use the AND operator to require both conditions be met."
+      },
+      {
+        id:3,
+        q: "Which of the following is the correct combination of filters and delivery type settings for a campaign targeting users who have opted in for push notifications and have viewed an app in the last 30 days?",
+        options: ["A) Filters: Opted-in for email; Delivery Type: Email", "B) Filters: Viewed app in last 30 days; Delivery Type: Push Notification", "C) Filters: Viewed app in last 30 days; Delivery Type: SMS", "D) Filters: Opted-in for push notifications; Delivery Type: Push Notification"],
+        answer: 1,
+        explanation: "Filter on recent app views and deliver via Push Notification."
+      },
+      {
+        id:4,
+        q: "What is a Segment Extension in Braze?",
+        options: ["A) A method to add new users to an existing segment", "B) A way to expand an existing segment using additional filters", "C) A feature that allows users to receive extended messages", "D) A tool for editing user attributes in real-time"],
+        answer: 1,
+        explanation: "Segment Extension typically refers to expanding an existing segment with new filters."
+      },
+      {
+        id:5,
+        q: "Which of the following best describes the Segment Insights feature in Braze?",
+        options: ["A) It shows real-time engagement data from a specific campaign", "B) It allows you to modify user profiles based on recent behavior", "C) It provides detailed analytics about a segment’s performance over time", "D) It allows you to test different message variations within a segment"],
+        answer: 2,
+        explanation: "Segment Insights provides analytics about a segment over time."
+      },
+      {
+        id:6,
+        q: "Which of the following is the purpose of the Segment analytics tracking feature in Braze?",
+        options: ["A) To track the delivery rates of individual messages within a segment", "B) To monitor user actions after they enter a segment", "C) To track campaign performance across multiple segments simultaneously", "D) To filter out inactive users from a segment"],
+        answer: 1,
+        explanation: "Segment analytics track what users do after they enter a segment."
+      },
+      {
+        id:7,
+        q: "When should you use the AND filter combination in Braze segmentation?",
+        options: ["A) To expand the audience by including users who meet any of the selected conditions", "B) To narrow down the audience to users who meet all selected conditions", "C) To exclude users who match certain attributes from your segment", "D) To test multiple campaign variations across different audiences"],
+        answer: 1,
+        explanation: "AND narrows the audience to those meeting all conditions."
+      },
+      {
+        id:8,
+        q: "Which of the following filter options in Braze would be appropriate for targeting users based on their activity over the past week?",
+        options: ["A) User engagement within the past 7 days", "B) User last purchase made 30 days ago", "C) User registration date within the last 90 days", "D) User session duration over the past 24 hours"],
+        answer: 0,
+        explanation: "User engagement within the past 7 days is the correct weekly activity filter."
+      },
+      {
+        id:9,
+        q: "Which feature in Braze helps you gain insights into how your segments are performing with respect to user engagement?",
+        options: ["A) User Profile Management", "B) Segment Analytics", "C) Campaign Metrics", "D) A/B Testing"],
+        answer: 1,
+        explanation: "Segment Analytics gives insights on segment performance."
+      },
+      {
+        id:10,
+        q: "If you want to send a push notification only to users who have installed your app but haven't made any purchases in the last 30 days, which of the following filter combinations would you use in Braze?",
+        options: ["A) User has installed the app AND no purchase in the last 30 days", "B) User has installed the app OR no purchase in the last 30 days", "C) User has installed the app AND has made a purchase in the last 30 days", "D) User has installed the app AND has viewed the app within the last 30 days"],
+        answer: 0,
+        explanation: "Combine 'installed' AND 'no purchase in last 30 days'."
+      },
+      {
+        id:11,
+        q: "Which of the following Liquid tags would you use in Braze to personalize a message with the user's first name?",
+        options: ["A) {{user.first_name}}", "B) {{user.name.first}}", "C) {{profile.first_name}}", "D) {{event.first_name}}"],
+        answer: 0,
+        explanation: "{{user.first_name}} is the standard Liquid tag for first name in Braze."
+      },
+      {
+        id:12,
+        q: "Which of the following is a valid use case for personalizing a Braze campaign or Canvas flow using event properties?",
+        options: ["A) Targeting users based on their location", "B) Personalizing content based on a user’s most recent purchase", "C) Sending a message based on the user's installation date", "D) Modifying the email subject line based on user device type"],
+        answer: 1,
+        explanation: "Event properties (like purchase details) are great for tailoring content to recent purchases."
+      },
+      {
+        id:13,
+        q: "In Braze, when would it be appropriate to use API trigger properties for personalizing a message?",
+        options: ["A) To display the user's profile picture dynamically", "B) To send a notification based on user behavior tracked by an external API", "C) To include the user's subscription tier in a message", "D) To adjust the layout of a message based on the user’s device"],
+        answer: 1,
+        explanation: "API trigger properties are used when external systems supply behavior data that triggers personalization."
+      },
+      {
+        id:14,
+        q: "Which of the following is the most appropriate use case for personalizing a Braze message using Connected Content?",
+        options: ["A) Personalizing a message subject line based on the user's last app session", "B) Displaying live product availability from an external API within a message", "C) Changing the background color of a push notification depending on user preferences", "D) Adjusting the delivery time of a campaign based on a user’s time zone"],
+        answer: 1,
+        explanation: "Connected Content lets you fetch live external data like inventory into messages."
+      },
+      {
+        id:15,
+        q: "Which of the following is an example of a localization method available in Braze for language personalization?",
+        options: ["A) Using Liquid tags to fetch the user’s preferred language from a profile attribute", "B) Dynamically adjusting the language of a message based on the time zone", "C) Delivering content only to users who have opted into receiving messages in their native language", "D) Creating different campaigns for different languages manually"],
+        answer: 0,
+        explanation: "Liquid tags can access profile attributes like preferred language for localization."
+      },
+      {
+        id:16,
+        q: "What is a common issue that may arise when using Liquid personalization in Braze?",
+        options: ["A) Incorrect use of the {{user.first_name}} tag", "B) Lack of custom fields in the user profile", "C) Overuse of dynamic content blocks", "D) Errors due to incorrect API endpoint configuration"],
+        answer: 0,
+        explanation: "Incorrect tag usage (typos or wrong path) commonly causes Liquid errors."
+      },
+      {
+        id:17,
+        q: "Which of the following would be an example of using Liquid conditional logic for message language personalization?",
+        options: ["A) Displaying a different version of the message if the user is in a specific region", "B) Sending a message only if a user has an active subscription", "C) Dynamically changing the message layout depending on the user’s device type", "D) Modifying the message content if the user clicks on a particular button in the app"],
+        answer: 0,
+        explanation: "Conditional logic can show different language/content if the user is in a specific region."
+      },
+      {
+        id:18,
+        q: "Which Liquid tag would you use to personalize a message with the user's email address in Braze?",
+        options: ["A) {{user.email}}", "B) {{profile.email}}", "C) {{event.email}}", "D) {{user.contact.email}}"],
+        answer: 0,
+        explanation: "{{user.email}} is the standard tag for email in Braze."
+      },
+      {
+        id:19,
+        q: "When personalizing a message in Braze using event properties, which of the following is a valid reason to include the user's last session duration as an event property?",
+        options: ["A) To recommend new features based on user engagement", "B) To adjust the frequency of notifications sent to the user", "C) To send a message only after the user’s session duration exceeds a specific threshold", "D) To change the content layout of a push notification"],
+        answer: 2,
+        explanation: "Using session duration as an event property can trigger messages when it exceeds thresholds."
+      },
+      {
+        id:20,
+        q: "Which of the following would be a common cause of a Liquid error when personalizing a message?",
+        options: ["A) Incorrectly specifying the user’s timezone in the profile attributes", "B) Not defining a fallback for when an attribute is missing in the user profile", "C) Setting the delivery time too late for a user’s local time zone", "D) Using the {{event.property}} tag in a message intended for an email campaign"],
+        answer: 1,
+        explanation: "Not providing fallbacks for missing attributes can cause Liquid to fail."
+      },
+      {
+        id:21,
+        q: "Which of the following best describes an Action-based message delivery method in Braze?",
+        options: ["A) A message is sent based on a user’s in-app behavior or triggered event.", "B) A message is sent when a user reaches a specific time or date.", "C) A message is delivered when an external system triggers it via an API.", "D) A message is scheduled to be sent at a fixed time, regardless of user actions."],
+        answer: 0,
+        explanation: "Action-based delivery is triggered by user actions/events."
+      },
+      {
+        id:22,
+        q: "Which of the following describes an API-triggered message delivery method in Braze?",
+        options: ["A) Messages are sent based on user actions tracked within the Braze app.", "B) Messages are delivered at a specific time using an external trigger via the Braze API.", "C) Messages are sent automatically when a campaign reaches its scheduled start time.", "D) Messages are triggered by user purchases on external websites."],
+        answer: 1,
+        explanation: "API-triggered messages are initiated by external systems calling Braze's API."
+      },
+      {
+        id:23,
+        q: "In Braze, when would you use a Scheduled message delivery method?",
+        options: ["A) When you want messages to be sent at a specific time to a fixed group of users.", "B) When a user performs an action that triggers an event.", "C) When you want to send messages based on user behavior in real-time.", "D) When you need to deliver messages using data from an external API."],
+        answer: 0,
+        explanation: "Scheduled delivery is for messages at definite times to a set audience."
+      },
+      {
+        id:24,
+        q: "Which of the following is a common use case for applying rate limit filters in Braze?",
+        options: ["A) To ensure users receive multiple messages per day during a high-engagement period.", "B) To avoid sending excessive messages to users and prevent spamming.", "C) To adjust delivery schedules based on real-time user behavior.", "D) To track users who engage with content across different channels."],
+        answer: 1,
+        explanation: "Rate limits are used to prevent over-messaging and spamming users."
+      },
+      {
+        id:25,
+        q: "What is the primary use case for setting rate limits on campaigns or messages in Braze?",
+        options: ["A) To prevent campaign content from being sent during certain hours.", "B) To control how often a specific user receives messages in a defined time period.", "C) To ensure messages are personalized based on user behavior.", "D) To increase the number of messages delivered per user in high-conversion periods."],
+        answer: 1,
+        explanation: "Rate limits control message frequency per user."
+      },
+      {
+        id:26,
+        q: "Which Braze testing feature allows you to compare multiple variations of a message to identify the most effective one?",
+        options: ["A) Global Control Groups", "B) Multivariate & A/B Testing", "C) Random Bucket Number", "D) Engagement Analytics"],
+        answer: 1,
+        explanation: "Multivariate & A/B testing compare variations to find the best performer."
+      },
+      {
+        id:27,
+        q: "Which of the following is true about Global Control Groups in Braze?",
+        options: ["A) They are used to create multiple variations of a message for testing.", "B) They allow you to monitor user engagement without any campaign messaging.", "C) They randomly assign users to different buckets to test message effectiveness.", "D) They are a method for sending personalized messages to users at different times."],
+        answer: 1,
+        explanation: "Global Control Groups are groups excluded from messaging to measure baseline engagement."
+      },
+      {
+        id:28,
+        q: "What is a conversion event in Braze, and how is it used?",
+        options: ["A) An event where a user interacts with a message but does not take further action.", "B) A specific user action or event that signifies the completion of a desired goal, such as a purchase or sign-up.", "C) A system message that triggers automatically when a user joins a campaign.", "D) An event used to test the effectiveness of a particular campaign segment."],
+        answer: 1,
+        explanation: "Conversion events represent goal completions such as purchases."
+      },
+      {
+        id:29,
+        q: "How are conversions calculated in Braze?",
+        options: ["A) Based on the total number of messages delivered in a campaign.", "B) Based on the number of users who receive a message, regardless of interaction.", "C) By tracking the number of users who complete a defined goal event after receiving a message.", "D) By calculating the number of times a user interacts with a campaign but does not complete an action."],
+        answer: 2,
+        explanation: "Conversions are users who complete the defined goal event after messaging."
+      },
+      {
+        id:30,
+        q: "Which of the following best describes the functionality of Braze's Intelligent Channel tool?",
+        options: ["A) It selects the best channel for delivering a message based on user engagement and channel preferences.", "B) It personalizes message content dynamically based on user attributes.", "C) It determines the optimal time for delivering a campaign message to maximize engagement.", "D) It helps create personalized messages based on external data sources like APIs."],
+        answer: 0,
+        explanation: "Intelligent Channel chooses the best channel based on engagement/preferences."
+      }
+    ];
+
+    // State
+    let currentIndex = 0;
+    let score = 0;
+    let answeredCount = 0;
+    const userAnswers = [];
+
+    // DOM refs
+    const qnum = document.getElementById('qnum');
+    const qtext = document.getElementById('qtext');
+    const optionsForm = document.getElementById('optionsForm');
+    const checkBtn = document.getElementById('checkBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const resultBox = document.getElementById('resultBox');
+    const scoreBadge = document.getElementById('scoreBadge');
+    const progFill = document.getElementById('progFill');
+    const restartBtn = document.getElementById('restartBtn');
+    const reviewBtn = document.getElementById('reviewBtn');
+    const reviewList = document.getElementById('reviewList');
+    const reviewItems = document.getElementById('reviewItems');
+
+    function loadQuestion(index){
+      const item = questions[index];
+      qnum.textContent = `Question ${index+1} of ${questions.length}`;
+      qtext.textContent = item.q;
+      optionsForm.innerHTML = '';
+      resultBox.style.display = 'none';
+      checkBtn.disabled = true;
+      nextBtn.disabled = true;
+
+      item.options.forEach((opt,i)=>{
+        const id = `opt_${index}_${i}`;
+        const label = document.createElement('label');
+        label.className = 'option';
+        label.setAttribute('for', id);
+        label.innerHTML = `
+          <input type="radio" name="option" id="${id}" value="${i}" />
+          <div>${opt}</div>
+        `;
+        optionsForm.appendChild(label);
+      });
+
+      // progress
+      updateProgress();
+    }
+
+    // enable Check when selection made
+    optionsForm.addEventListener('change', (e)=>{
+      if(e.target && e.target.name === 'option'){
+        checkBtn.disabled = false;
+      }
+    });
+
+    checkBtn.addEventListener('click', ()=>{
+      const selected = optionsForm.querySelector('input[name="option"]:checked');
+      if(!selected) return;
+      const selectedIndex = parseInt(selected.value,10);
+      const q = questions[currentIndex];
+      // lock options to prevent change before next
+      optionsForm.querySelectorAll('input[name="option"]').forEach(i=>i.disabled = true);
+      // reveal answer
+      const correctIndex = q.answer;
+      const isCorrect = selectedIndex === correctIndex;
+      userAnswers[currentIndex] = {selected:selectedIndex, correct:correctIndex, correctFlag:isCorrect};
+      answeredCount++;
+      if(isCorrect){
+        score++;
+        resultBox.className = 'result correct';
+        resultBox.textContent = `Correct — ${q.options[correctIndex]}`;
+      } else {
+        resultBox.className = 'result wrong';
+        resultBox.innerHTML = `Incorrect — You chose: <strong>${q.options[selectedIndex]}</strong><br/>Correct answer: <strong>${q.options[correctIndex]}</strong><br/><small style="color:var(--muted)">${q.explanation || ''}</small>`;
+      }
+      resultBox.style.display = 'block';
+      checkBtn.disabled = true;
+      nextBtn.disabled = false;
+      updateScore();
+      // prepare review list entry
+      updateReviewEntry(currentIndex);
+    });
+
+    nextBtn.addEventListener('click', ()=>{
+      if(currentIndex < questions.length - 1){
+        currentIndex++;
+        loadQuestion(currentIndex);
+      } else {
+        // reached end
+        alert(`Quiz complete! Score: ${score} / ${questions.length}`);
+      }
+    });
+
+    restartBtn.addEventListener('click', ()=>{
+      if(!confirm('Restart test? Your progress will be cleared.')) return;
+      currentIndex = 0; score = 0; answeredCount=0; userAnswers.length = 0;
+      document.querySelectorAll('.result').forEach(r=>r.style.display='none');
+      loadQuestion(0);
+      updateScore();
+      reviewList.style.display = 'none';
+      reviewItems.innerHTML = '';
+    });
+
+    reviewBtn.addEventListener('click', ()=>{
+      reviewList.style.display = reviewList.style.display === 'block' ? 'none' : 'block';
+      if(reviewList.style.display === 'block') populateReview();
+    });
+
+    function updateScore(){
+      scoreBadge.textContent = `Score: ${score} / ${questions.length}`;
+    }
+    function updateProgress(){
+      const pct = Math.round(((currentIndex) / questions.length) * 100);
+      progFill.style.width = pct + '%';
+    }
+
+    function updateReviewEntry(idx){
+      // create or update a review item for this question
+      const q = questions[idx];
+      const ua = userAnswers[idx];
+      // store to DOM data? We'll rebuild on populateReview
+    }
+
+    function populateReview(){
+      reviewItems.innerHTML = '';
+      questions.forEach((q,i)=>{
+        const ua = userAnswers[i];
+        const wrapper = document.createElement('div');
+        wrapper.style.padding = '8px 0';
+        wrapper.style.borderBottom = '1px dashed #eef5ff';
+        wrapper.innerHTML = `<strong>Q${i+1}:</strong> ${q.q} <br/> <em>Your answer:</em> ${ua ? q.options[ua.selected] : '<span style="color:var(--muted)">Not answered</span>'} <br/> <em>Correct:</em> ${q.options[q.answer]}`;
+        reviewItems.appendChild(wrapper);
+      });
+    }
+
+    // init
+    loadQuestion(0);
+    updateScore();
+  </script>
+</body>
+</html>
